@@ -1,0 +1,49 @@
+name: ICT Forex Bias — Run Analysis
+
+on:
+  schedule:
+    # London Kill Zone — 08:45 VN (01:45 UTC), Mon–Fri
+    - cron: "45 1 * * 1-5"
+    # New York Kill Zone — 13:45 VN (06:45 UTC), Mon–Fri
+    - cron: "45 6 * * 1-5"
+  workflow_dispatch:
+    # Allow manual trigger from the Actions tab at any time
+
+permissions:
+  contents: write  # Required for git commit/push of history.json
+
+jobs:
+  run-analysis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run ICT Bias pipeline
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python src/main.py
+
+      - name: Commit updated history.json
+        run: |
+          git config user.name "ict-bias-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add data/history.json
+          git diff --staged --quiet || git commit -m "bot: bias report $(date -u +%Y-%m-%d) $SESSION"
+          git push
+        env:
+          SESSION: ${{ github.event_name == 'schedule' && '(scheduled)' || 'manual' }}
