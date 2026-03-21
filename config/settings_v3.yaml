@@ -35,7 +35,7 @@ monitoring:
   re_tune_trigger: "precision_20d < 0.50 for 2 consecutive weeks"
 
 telegram:
-  enabled: false          # set to true when bot is ready
+  enabled: true          # set to true when bot is ready
   bot_token: ""          # or set TELEGRAM_BOT_TOKEN env var
   chat_id: ""            # or set TELEGRAM_CHAT_ID env var
   send_daily_at_utc: "22:00"

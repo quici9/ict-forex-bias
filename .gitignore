@@ -1,26 +1,84 @@
-# Environment
+# ==============================================================================
+# SENSITIVE / SECRETS
+# ==============================================================================
 .env
 .env.local
+.env.*.local
+*.key
+*.pem
+*.p12
+*.pfx
 
-# Python
+# ==============================================================================
+# LOCAL DATA — for testing & tuning only, never commit
+# ==============================================================================
+
+# Historical price data fetched locally (large, re-fetchable via TwelveData)
+data/backtest/
+data/raw/
+data/cache/
+
+# Tuning artifacts (local experiment outputs)
+data/tuning_state*.json
+data/sweep_results*.json
+data/tune_results*/
+
+# Ground truth / labelled data (large csv files)
+data/ground_truth*.csv
+
+# Model artifacts & serialized objects
+models/
+*.pkl
+*.joblib
+*.h5
+*.onnx
+
+# ==============================================================================
+# PYTHON
+# ==============================================================================
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
 .pytest_cache/
-.venv/
-venv/
+.mypy_cache/
+.ruff_cache/
 *.egg-info/
 dist/
 build/
 *.so
 
-# IDE
+# Virtual environments
+.venv/
+.venv2/
+venv/
+env/
+
+# ==============================================================================
+# IDE / EDITOR
+# ==============================================================================
 .idea/
 .vscode/
 *.swp
 *.swo
 
-# macOS
+# Claude Code local settings
+.claude/settings.local.json
+
+# ==============================================================================
+# OS
+# ==============================================================================
 .DS_Store
+Thumbs.db
+
+# ==============================================================================
+# LOGS & REPORTS
+# ==============================================================================
+logs/
+*.log
+reports/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
