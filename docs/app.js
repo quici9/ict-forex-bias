@@ -36,9 +36,10 @@ const SYMBOL_TIERS = {
 
 const FIRST_LIVE_DATE = '2026-03-24';
 
-// GitHub Pages serves the repo root; adjust path relative to docs/ if needed
-const DATA_STATS_URL   = '../data/live_stats.json';
-const DATA_SIGNALS_URL = '../data/live_performance.jsonl';
+// GitHub Pages serves only the docs/ directory.
+// Data files are copied into docs/data/ by the CI workflow.
+const DATA_STATS_URL   = './data/live_stats.json';
+const DATA_SIGNALS_URL = './data/live_performance.jsonl';
 
 const SIGNAL_EMOJI = { BULLISH: '🟢', BEARISH: '🔴', NEUTRAL: '⚪' };
 const LOW_TIER_EMOJI = { BULLISH: '🟡', BEARISH: '🟠', NEUTRAL: '⚫' };

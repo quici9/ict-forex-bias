@@ -55,10 +55,17 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python scripts/v2/daily_run.py
 
+      - name: Sync data to docs/data (GitHub Pages)
+        run: |
+          mkdir -p docs/data
+          cp data/live_stats.json docs/data/live_stats.json
+          cp data/live_performance.jsonl docs/data/live_performance.jsonl
+
       - name: Commit live performance data
         run: |
           git config user.name "ict-bias-bot"
           git config user.email "bot@users.noreply.github.com"
-          git add data/live_performance.jsonl data/live_stats.json
+          git add data/live_performance.jsonl data/live_stats.json \
+                  docs/data/live_stats.json docs/data/live_performance.jsonl
           git diff --staged --quiet || git commit -m "bot: bias $(date -u +%Y-%m-%d) $(date -u +%H:%M) UTC"
           git push
