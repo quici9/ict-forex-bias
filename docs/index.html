@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ICT Forex Bias — Daily Dashboard</title>
+  <meta name="description" content="Live monitoring dashboard for the ICT Forex Bias System V3. Tracks daily D1 continuation signals and precision for 8 major FX pairs." />
+  <meta property="og:title" content="ICT Forex Bias Dashboard" />
+  <meta property="og:description" content="Live D1 continuation signals · 64.8% backtest precision · 7/7 walk-forward" />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+  <!-- ── Alert Banner ─────────────────────────────────────────── -->
+  <div id="alert-banner" class="alert-banner" role="alert">
+    <div class="alert-banner-inner">
+      <span class="alert-icon">🚨</span>
+      <span id="alert-message">Precision below threshold — review required.</span>
+    </div>
+  </div>
+
+  <!-- ── Header ───────────────────────────────────────────────── -->
+  <header class="site-header" role="banner">
+    <div class="header-inner">
+      <div class="header-brand">
+        <span class="brand-dot" aria-hidden="true"></span>
+        <span class="brand-name">ICT Forex Bias</span>
+        <span class="brand-version">V3</span>
+      </div>
+
+      <div class="header-meta">
+        <div class="meta-item">
+          <span class="meta-label">Last run</span>
+          <span class="meta-value" id="meta-last-updated">—</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Deploy</span>
+          <span class="meta-value">2026-03-22</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Main Content ─────────────────────────────────────────── -->
+  <main class="main-content" role="main">
+
+    <!-- 1. Today's Signals -->
+    <section class="signals-section" aria-labelledby="signals-heading">
+      <div class="section-header">
+        <h1 id="signals-heading" class="section-title">Today's Signals</h1>
+        <span class="section-badge" id="signals-date">—</span>
+      </div>
+
+      <div id="signals-container">
+        <!-- Rendered by app.js -->
+        <div class="loading-state">
+          <span class="loading-spinner"></span>
+          <span>Loading signals…</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. KPI Cards -->
+    <section aria-labelledby="kpi-heading">
+      <div class="section-header">
+        <h2 id="kpi-heading" class="section-title">Performance Overview</h2>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card fade-in" id="kpi-baseline">
+          <div class="kpi-label">Baseline</div>
+          <div class="kpi-value bullish-color">64.8%</div>
+          <div class="kpi-sub">Backtest test set</div>
+        </div>
+
+        <div class="kpi-card fade-in" id="kpi-live" style="animation-delay:0.07s">
+          <div class="kpi-label">Live Precision</div>
+          <div class="kpi-value muted">—</div>
+          <div class="kpi-sub">No signals yet</div>
+        </div>
+
+        <div class="kpi-card fade-in" id="kpi-rolling" style="animation-delay:0.14s">
+          <div class="kpi-label">Rolling 20-Day</div>
+          <div class="kpi-value muted">—</div>
+          <div class="kpi-sub">Need more signals</div>
+        </div>
+
+        <div class="kpi-card fade-in" id="kpi-walkforward" style="animation-delay:0.21s">
+          <div class="kpi-label">Walk-Forward</div>
+          <div class="kpi-value bullish-color">7/7</div>
+          <div class="kpi-sub">Sharpe 4.94</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Per-Symbol Table -->
+    <section aria-labelledby="symbols-heading">
+      <div class="section-header">
+        <h2 id="symbols-heading" class="section-title">Performance by Symbol</h2>
+        <span class="section-badge">Backtest vs Live</span>
+      </div>
+
+      <div class="table-wrapper fade-in">
+        <table class="data-table" aria-label="Per-symbol performance">
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th>Tier</th>
+              <th>Backtest Precision</th>
+              <th>Live Precision</th>
+              <th class="text-center">Signals</th>
+            </tr>
+          </thead>
+          <tbody id="symbol-table-body">
+            <!-- Rendered by app.js -->
+            <tr class="table-empty-row">
+              <td colspan="5"><span class="loading-spinner"></span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 4. Signal History -->
+    <section aria-labelledby="history-heading">
+      <div class="section-header">
+        <h2 id="history-heading" class="section-title">Signal History</h2>
+        <span class="section-badge" id="history-count"></span>
+      </div>
+
+      <div class="table-wrapper fade-in">
+        <table class="data-table" aria-label="Signal history">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Symbol</th>
+              <th>Predicted</th>
+              <th>Actual</th>
+              <th class="text-center">Result</th>
+              <th>Close %</th>
+            </tr>
+          </thead>
+          <tbody id="history-table-body">
+            <!-- Rendered by app.js -->
+            <tr class="table-empty-row">
+              <td colspan="6">
+                No signals recorded yet · Go-live: 24 Mar 2026
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 5. Methodology (static, always visible) -->
+    <section aria-labelledby="method-heading">
+      <div class="section-header">
+        <h2 id="method-heading" class="section-title">Methodology</h2>
+        <span class="section-badge">D1 Continuation · V3</span>
+      </div>
+
+      <div class="table-wrapper fade-in" style="padding: 1.5rem 1.25rem">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:2rem;font-size:0.85rem;color:var(--text-secondary)">
+
+          <div>
+            <p style="font-weight:600;color:var(--text-primary);margin-bottom:0.625rem;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em">Signal Logic</p>
+            <p style="margin-bottom:0.5rem">Uses 2 closed D1 candles (T-2 and T-1) to predict the direction of day T:</p>
+            <ul style="padding-left:1.25rem;line-height:1.9;color:var(--text-muted)">
+              <li><span style="color:var(--bullish);font-weight:600">BULLISH</span> — Close(T-1) &gt; High(T-2) + 20% × Range(T-2)</li>
+              <li><span style="color:var(--bearish);font-weight:600">BEARISH</span> — Close(T-1) &lt; Low(T-2) − 20% × Range(T-2)</li>
+              <li><span style="color:var(--neutral);font-weight:600">NEUTRAL</span> — All other configurations</li>
+            </ul>
+          </div>
+
+          <div>
+            <p style="font-weight:600;color:var(--text-primary);margin-bottom:0.625rem;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em">Monitoring Rules</p>
+            <ul style="padding-left:1.25rem;line-height:1.9;color:var(--text-muted)">
+              <li>Re-tune if rolling 20d &lt; 50% for <strong style="color:var(--text-secondary)">2 consecutive weeks</strong></li>
+              <li>Investigate if signal freq &lt; 1.0/wk for <strong style="color:var(--text-secondary)">4+ weeks</strong></li>
+              <li>GBP/JPY flagged as LOW tier (50% test precision)</li>
+              <li>Next quarterly review: <strong style="color:var(--text-secondary)">2026-06-22</strong></li>
+            </ul>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ── Footer ───────────────────────────────────────────────── -->
+  <footer class="site-footer" role="contentinfo">
+    <div class="footer-inner">
+      <div class="footer-primary">
+        ICT Forex Bias System · V3 deployed 2026-03-22 · D1 Continuation-Only
+      </div>
+      <div class="footer-secondary" id="footer-updated">
+        Signals auto-updated Mon–Fri at 08:45 &amp; 13:45 VN time via GitHub Actions
+      </div>
+      <div class="footer-disclaimer">
+        For informational purposes only. Not financial advice.
+        No automated trade execution. Past performance does not guarantee future results.
+      </div>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

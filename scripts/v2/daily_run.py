@@ -113,21 +113,48 @@ def fetch_actual_bias(symbol: str, record_date: str, api_key: str) -> str | None
 
 # ── Signal generation ─────────────────────────────────────────────────────────
 
-def generate_signals(prediction_date: date, api_key: str) -> list[DailyBias]:
-    """Fetch data and return DailyBias for all symbols with debug output."""
-    biases: list[DailyBias] = []
+# Raw candle snapshot for one symbol — kept alongside DailyBias for ML logging.
+RawCandles = dict
+
+
+def _build_candle_snapshot(t2_row: "pd.Series", t1_row: "pd.Series") -> RawCandles:
+    """Capture T-2 and T-1 OHLC values as a flat dict for ML feature storage."""
+    t2_range = float(t2_row["High"]) - float(t2_row["Low"])
+    t1_range = float(t1_row["High"]) - float(t1_row["Low"])
+    t1_body  = abs(float(t1_row["Close"]) - float(t1_row.get("Open", float(t1_row["Close"]))))
+    return {
+        # T-2 candle (reference candle)
+        "t2_high":        round(float(t2_row["High"]),  5),
+        "t2_low":         round(float(t2_row["Low"]),   5),
+        "t2_close":       round(float(t2_row["Close"]), 5),
+        "t2_open":        round(float(t2_row.get("Open", t2_row["Close"])), 5),
+        "t2_range":       round(t2_range, 5),
+        # T-1 candle (signal candle)
+        "t1_high":        round(float(t1_row["High"]),  5),
+        "t1_low":         round(float(t1_row["Low"]),   5),
+        "t1_close":       round(float(t1_row["Close"]), 5),
+        "t1_open":        round(float(t1_row.get("Open", t1_row["Close"])), 5),
+        "t1_range":       round(t1_range, 5),
+        "t1_body":        round(t1_body, 5),
+        "t1_body_ratio":  round(t1_body / t1_range, 4) if t1_range > 0 else 0.0,
+        # Derived features useful for ML
+        "t1_close_pct_of_t2_range": round(
+            (float(t1_row["Close"]) - float(t2_row["Low"])) / t2_range, 4
+        ) if t2_range > 0 else 0.0,
+    }
+
+
+def generate_signals(
+    prediction_date: date, api_key: str,
+) -> list[tuple[DailyBias, RawCandles]]:
+    """Fetch data and return (DailyBias, raw_candles) pairs for all symbols."""
+    results: list[tuple[DailyBias, RawCandles]] = []
 
     for sym in SYMBOLS:
         rows = fetch_d1_rows(sym, api_key)
         if rows is None:
             continue
         t2_row, t1_row = rows
-
-        t2_range = float(t1_row["High"]) - float(t1_row["Low"])
-        if t2_range > 0:
-            close_pct = (float(t1_row["Close"]) - float(t2_row["High"])) / t2_range
-        else:
-            close_pct = 0.0
 
         bias = build_daily_bias(
             symbol=sym,
@@ -139,12 +166,13 @@ def generate_signals(prediction_date: date, api_key: str) -> list[DailyBias]:
             t2_low=float(t2_row["Low"]),
             continuation_min_close_pct=CONTINUATION_CLOSE_PCT,
         )
-        biases.append(bias)
+        candles = _build_candle_snapshot(t2_row, t1_row)
+        results.append((bias, candles))
 
         # Debug per-symbol
         _print_debug(sym, t2_row, t1_row, bias)
 
-    return biases
+    return results
 
 
 def _print_debug(
@@ -174,14 +202,20 @@ def _print_debug(
 
 # ── Persistence ───────────────────────────────────────────────────────────────
 
-def save_predictions(biases: list[DailyBias], prediction_date: date) -> None:
-    """Append predictions (actual=null) to live_performance.jsonl.
-    Only saves CONTINUATION signals (non-NEUTRAL).
+def save_predictions(
+    results: list[tuple[DailyBias, RawCandles]],
+    prediction_date: date,
+) -> None:
+    """Append all predictions to live_performance.jsonl with full candle snapshot.
+
+    Records ALL symbols (including NEUTRAL) so ML datasets have negative examples.
+    The 'predicted' field reflects the rule-based signal; 'actual' is filled later.
     """
     LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
     date_str = prediction_date.isoformat()
+    dow = prediction_date.strftime("%A")  # e.g. "Monday"
 
-    # Avoid duplicates: load existing dates × symbols
+    # Avoid duplicates: load existing date × symbol keys
     existing_keys: set[str] = set()
     if LOG_FILE.exists():
         for line in LOG_FILE.read_text().splitlines():
@@ -191,30 +225,41 @@ def save_predictions(biases: list[DailyBias], prediction_date: date) -> None:
 
     written = 0
     with open(LOG_FILE, "a") as f:
-        for b in biases:
-            if b.bias == "NEUTRAL":
-                continue
+        for b, candles in results:
             key = f"{date_str}|{b.symbol}"
             if key in existing_keys:
                 continue
             entry = {
+                # ── Identity ──────────────────────────────────────────────────
                 "date":           date_str,
+                "day_of_week":    dow,
                 "symbol":         b.symbol,
-                "predicted":      b.bias,
-                "pattern":        b.pattern,
+                # ── Rule-based output (labels for supervised ML) ───────────────
+                "predicted":      b.bias,        # BULLISH | BEARISH | NEUTRAL
+                "pattern":        b.pattern,     # CONTINUATION | NONE
                 "close_pct":      round(b.close_pct_beyond, 4),
-                "confidence":     b.confidence,
+                "confidence":     b.confidence,  # NORMAL | LOW
+                # ── Raw candle features (inputs for ML models) ─────────────────
+                "features":       candles,
+                # ── Outcome fields (filled by --record run) ────────────────────
                 "actual":         None,
                 "correct":        None,
+                # ── Metadata ───────────────────────────────────────────────────
+                "schema_v":       2,
                 "logged_at":      datetime.now(tz=timezone.utc).isoformat(),
             }
             f.write(json.dumps(entry) + "\n")
             written += 1
 
+    directional = sum(1 for b, _ in results if b.bias != "NEUTRAL")
+    neutral     = sum(1 for b, _ in results if b.bias == "NEUTRAL")
     if written:
-        print(f"\n  Saved {written} prediction(s) → {LOG_FILE.relative_to(PROJECT_ROOT)}")
+        print(
+            f"\n  Saved {written} record(s) → {LOG_FILE.relative_to(PROJECT_ROOT)}"
+            f"  ({directional} signal, {neutral} neutral)"
+        )
     else:
-        print(f"\n  No new predictions to save (duplicates skipped or all neutral).")
+        print(f"\n  No new predictions to save (duplicates skipped).")
 
 
 def _load_log() -> list[dict]:
@@ -408,13 +453,14 @@ def main() -> None:
 
     print("\n[DEBUG] Per-symbol pattern detection:")
     print("-" * 60)
-    biases = generate_signals(prediction_date, api_key)
+    results = generate_signals(prediction_date, api_key)
 
-    if not biases:
+    if not results:
         print("[ERROR] No signals generated — check API connectivity.")
         sys.exit(1)
 
-    # Format and print Telegram output
+    # Format and print Telegram output (directional signals only)
+    biases = [b for b, _ in results]
     print()
     print("=" * 60)
     tg_msg = format_telegram_daily(biases)
@@ -422,7 +468,7 @@ def main() -> None:
     print("=" * 60)
 
     if not args.dry_run:
-        save_predictions(biases, prediction_date)
+        save_predictions(results, prediction_date)
 
         sent = send_telegram(tg_msg)
         if sent:
