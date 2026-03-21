@@ -1,0 +1,41 @@
+# ICT Forex Bias System — Final Configuration (Round 10 / Deploy)
+# Test precision: 64.8% (Continuation-Only)
+# Signal frequency: 2.09/symbol/week
+# Reversal: DISABLED (35% precision, sub-random)
+
+use_pattern_scorer: true
+
+signal_config:
+  mode: "continuation_only"
+  reversal_mode: "disabled"
+  low_confidence_symbols:
+    - "GBP/JPY"
+  low_confidence_threshold: 0.55
+
+d1_pattern:
+  # Only continuation_min_close_pct is active
+  reversal_min_wick_pct: 0.4       # inactive (reversal disabled)
+  continuation_min_close_pct: 0.2
+  reversal_body_ratio: 0.5         # inactive (reversal disabled)
+
+h1_confirmation:
+  swing_lookback: 2
+  fvg_lookback_candles: 8
+  h1_context_candles_before: 18
+
+live:
+  daily_report_utc: "22:00"
+  pre_london_utc: "06:30"
+  pre_ny_utc: "12:30"
+
+monitoring:
+  rolling_window_days: 20
+  alert_threshold: 0.50
+  review_date: "2026-06-22"
+  re_tune_trigger: "precision_20d < 0.50 for 2 consecutive weeks"
+
+telegram:
+  enabled: false          # set to true when bot is ready
+  bot_token: ""          # or set TELEGRAM_BOT_TOKEN env var
+  chat_id: ""            # or set TELEGRAM_CHAT_ID env var
+  send_daily_at_utc: "22:00"

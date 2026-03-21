@@ -1,19 +1,21 @@
-name: ICT Forex Bias — Run Analysis
+name: ICT Forex Bias — Daily Run (V3)
 
 on:
   schedule:
-    # London Kill Zone — 08:45 VN (01:45 UTC), Mon–Fri
+    # London pre-KZ — 08:45 VN (01:45 UTC), Mon–Fri
+    # Records yesterday's actual + generates today's signals
     - cron: "45 1 * * 1-5"
-    # New York Kill Zone — 13:45 VN (06:45 UTC), Mon–Fri
+    # NY pre-KZ — 13:45 VN (06:45 UTC), Mon–Fri
+    # Generates today's signals (reminder)
     - cron: "45 6 * * 1-5"
   workflow_dispatch:
-    # Allow manual trigger from the Actions tab at any time
+    # Manual trigger from Actions tab
 
 permissions:
-  contents: write  # Required for git commit/push of history.json
+  contents: write
 
 jobs:
-  run-analysis:
+  daily-run:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -32,18 +34,31 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run ICT Bias pipeline
+      - name: Record yesterday's actual (London run only)
+        # D1 Forex candles close at 22:00 UTC — London run (01:45 UTC) is safe to record
+        if: github.event_name == 'schedule'
         env:
+          TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
+        run: |
+          PREV_DATE=$(date -u -d "yesterday" +%Y-%m-%d 2>/dev/null || date -u -v-1d +%Y-%m-%d)
+          HOUR=$(date -u +%H)
+          # Only record at London run (01:45 UTC, hour=01)
+          if [ "$HOUR" = "01" ]; then
+            echo "Recording actuals for $PREV_DATE"
+            python scripts/v2/daily_run.py --record "$PREV_DATE" || true
+          fi
+
+      - name: Generate daily signals
+        env:
+          TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python src/main.py
+        run: python scripts/v2/daily_run.py
 
-      - name: Commit updated history.json
+      - name: Commit live performance data
         run: |
           git config user.name "ict-bias-bot"
           git config user.email "bot@users.noreply.github.com"
-          git add data/history.json
-          git diff --staged --quiet || git commit -m "bot: bias report $(date -u +%Y-%m-%d) $SESSION"
+          git add data/live_performance.jsonl data/live_stats.json
+          git diff --staged --quiet || git commit -m "bot: bias $(date -u +%Y-%m-%d) $(date -u +%H:%M) UTC"
           git push
-        env:
-          SESSION: ${{ github.event_name == 'schedule' && '(scheduled)' || 'manual' }}

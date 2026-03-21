@@ -1,0 +1,224 @@
+{
+  "version": 3,
+  "round": 13,
+  "phase_completed": "D",
+  "deploy_ready": true,
+  "project_complete": true,
+  "deployed": true,
+  "deploy_date": "2026-03-22",
+  "deploy_version": "v3",
+  "deploy_precision": 0.648,
+  "deploy_freq": 2.09,
+  "deploy_freq_test": 2.08,
+  "deploy_freq_train": 1.38,
+  "first_live_date": "2026-03-24",
+  "first_live_prediction_date": "2026-03-24",
+  "symbol_tiers": {
+    "HIGH":   ["NZD/USD", "USD/CAD", "EUR/USD", "USD/JPY"],
+    "NORMAL": ["AUD/USD", "USD/CHF", "GBP/USD"],
+    "LOW":    ["GBP/JPY"]
+  },
+  "rounds_summary": {
+    "R1_5":  "Rule-based + LR → 17.8% ceiling",
+    "R6":    "D1 2-candle pattern → 57.4% (+40pp)",
+    "R7_9":  "Extend + Validate → 64.8%, 7/7 WF",
+    "R10":   "Data investigation → V3 confirmed",
+    "R11":   "close_pct sweep → freq gap structural",
+    "R12":   "H1 BOS/FVG → no edge (49%)",
+    "R13":   "cp=0.00 WF → 53% in 2025, rejected"
+  },
+  "review_schedule": {
+    "month_1": "2026-04-22",
+    "month_3": "2026-06-22",
+    "reversal_re_eval": "2026-09-22"
+  },
+  "tune_again_if": [
+    "rolling_20d < 0.50 for 2 consecutive weeks",
+    "regime shift detected (freq drops to <1.0/wk for 4+ weeks)",
+    "live precision < 0.55 after 3 months (90+ signals)"
+  ],
+  "do_not_tune_if": [
+    "single bad week (normal variance)",
+    "precision 60-64% (within expected backtest range)",
+    "GBP/JPY underperforms (known LOW confidence pair)",
+    "no-signal day (normal \u2014 avg 1.4 signals/sym/wk long-run)"
+  ],
+  "final_mode": "continuation_only",
+  "reversal_mode": "disabled",
+  "final_test_precision": 0.648,
+  "signal_freq_test_period": 2.09,
+  "signal_freq_long_run": 1.38,
+  "test_period": "2025-07-01 to 2026-03-21",
+  "data_range": "2019-01-01 to 2026-03-21",
+  "total_data_rows": 15685,
+  "final_params": {
+    "continuation_min_close_pct": 0.2,
+    "reversal_min_wick_pct": 0.4,
+    "reversal_body_ratio": 0.5,
+    "note": "wick and body_ratio inactive (reversal disabled)"
+  },
+  "per_symbol_test_precision": {
+    "AUD/USD": 0.648,
+    "EUR/USD": 0.662,
+    "GBP/JPY": 0.5,
+    "GBP/USD": 0.642,
+    "NZD/USD": 0.729,
+    "USD/CAD": 0.667,
+    "USD/CHF": 0.643,
+    "USD/JPY": 0.663
+  },
+  "direction_precision": {
+    "bullish": 0.656,
+    "bearish": 0.639
+  },
+  "low_confidence_symbols": [
+    "GBP/JPY"
+  ],
+  "gbp_jpy_precision": 0.5,
+  "reversal_analysis": {
+    "test_precision": 0.352,
+    "h1_gated_precision": 0.389,
+    "h1_gated_n": 95,
+    "decision": "DISABLED \u2014 fails 45% threshold",
+    "re_evaluate_after": "2026-09-22"
+  },
+  "walk_forward": {
+    "windows": 7,
+    "passed": 7,
+    "min_precision": 0.578,
+    "sharpe": 4.94,
+    "max_drawdown_units": 21
+  },
+  "precision_history_v2": [
+    0.4818,
+    0.5743,
+    0.5922,
+    0.648
+  ],
+  "precision_history_labels": [
+    "R5 baseline",
+    "R6 validate",
+    "R7 grid V3",
+    "R8 cont-only"
+  ],
+  "round10": {
+    "completed": "2026-03-22",
+    "phases_run": [
+      "A",
+      "B0",
+      "D"
+    ],
+    "phases_skipped": [
+      "B1",
+      "B2",
+      "C",
+      "E"
+    ],
+    "b0_finding": "No data bug \u2014 t1_open correct in all 15685 rows. EUR/USD+GBP/USD low performance 2019-2024 is genuine regime (doji-type candles, body_pct~0-2%, qualify_rate=4-7%). Regime shifted in 2025-2026.",
+    "phase_a_finding": "No exploitable feature gap (>=10pp). Apparent F3 Strong Body gap was data-regime artifact.",
+    "freq_regime_note": "Train 2019-2024 = 1.38/sym/wk. Test 2025-2026 = 2.08/sym/wk (regime shift, EUR/USD+GBP/USD directional).",
+    "phase_d_finding": "All close_pct values [0.20-0.35] fail freq>=1.8 on train set. No improvement possible within freq constraint.",
+    "v4_adopted": false,
+    "final_version": "v3",
+    "key_finding": "EUR/USD+GBP/USD 2019-2024 weakness is genuine low-vol regime, not a data bug. V3 at 64.8%/2.08wk is optimal deployable config."
+  },
+  "monitoring": {
+    "alert_threshold": 0.5,
+    "rolling_window_days": 20,
+    "review_date": "2026-06-22",
+    "re_tune_trigger": "precision_20d < 0.50 for 2 consecutive weeks",
+    "log_file": "data/live_performance.jsonl",
+    "stats_file": "data/live_stats.json",
+    "signal_cache": "data/last_signals.json"
+  },
+  "key_finding": "64.8% precision (test) at 2.09/sym/wk. Continuation-Only. 7/7 walk-forward pass. Sharpe 4.94. Round 10 confirmed no data bug, no V4 improvement possible. DEPLOYED 2026-03-22.",
+  "next_action": "Monitor live. Record actuals with scripts/v2/monitor.py. Review at 2026-06-22.",
+  "round13": {
+    "completed": "2026-03-22",
+    "phase_a": {
+      "cp_0_00": {
+        "train_prec": 0.588,
+        "train_freq": 2.11,
+        "test_prec": 0.573,
+        "test_freq": 2.82,
+        "test_n": 848
+      },
+      "cp_0_05": {
+        "train_prec": 0.599,
+        "train_freq": 1.91,
+        "test_prec": 0.598,
+        "test_freq": 2.58,
+        "eliminated": "train_freq < 2.0"
+      },
+      "test_period": "2025-07-01 / 2026-03-21",
+      "selected_for_phase_b": "cp=0.00"
+    },
+    "phase_b_walkforward": {
+      "config": "cp=0.00",
+      "pass_rule": ">=6/7 AND min>=55%",
+      "windows_pass": 6,
+      "windows_total": 7,
+      "min_precision": 0.53,
+      "freq_pass_count": 7,
+      "failed_window": "Win 6 (2025) = 53.0%",
+      "v3_comparison": "7/7 pass | min 57.8%",
+      "per_window": [
+        {
+          "win": 1,
+          "year": "2020",
+          "precision": 0.604,
+          "freq_wk": 2.0,
+          "pass": true
+        },
+        {
+          "win": 2,
+          "year": "2021",
+          "precision": 0.599,
+          "freq_wk": 2.07,
+          "pass": true
+        },
+        {
+          "win": 3,
+          "year": "2022",
+          "precision": 0.592,
+          "freq_wk": 2.2,
+          "pass": true
+        },
+        {
+          "win": 4,
+          "year": "2023",
+          "precision": 0.577,
+          "freq_wk": 2.22,
+          "pass": true
+        },
+        {
+          "win": 5,
+          "year": "2024",
+          "precision": 0.552,
+          "freq_wk": 2.21,
+          "pass": true
+        },
+        {
+          "win": 6,
+          "year": "2025",
+          "precision": 0.53,
+          "freq_wk": 2.52,
+          "pass": false
+        },
+        {
+          "win": 7,
+          "year": "2026 Q1",
+          "precision": 0.583,
+          "freq_wk": 3.06,
+          "pass": true
+        }
+      ]
+    },
+    "phase_c_decision": "KEEP_V3",
+    "phase_c_rationale": "Walk-forward 6/7 pass but Win 6 (2025) = 53.0% < 55% floor. V3 walk-forward is 7/7 with min 57.8%. Precision trade-off (-7.5pp) kh\u00f4ng b\u00f9 \u0111\u1eafp \u0111\u01b0\u1ee3c freq gain (+36%) khi 2025 (n\u0103m live) l\u00e0 n\u0103m y\u1ebfu nh\u1ea5t v\u00e0 cp=0.00 kh\u00f4ng \u0111\u1ea1t ng\u01b0\u1ee1ng.",
+    "v4_adopted": false,
+    "final_version": "v3",
+    "key_finding": "cp=0.00 increases freq +36% but fails walk-forward floor: Win 6 (2025) = 53.0% < 55%. V3 (7/7, min 57.8%) remains superior.",
+    "next_action": "MAINTAIN V3 deployment. Review at 2026-06-22."
+  }
+}
