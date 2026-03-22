@@ -2,7 +2,9 @@
 ICT Forex Bias System — Daily Runner (Production V3)
 
 Usage:
-    python daily_run.py                    # morning run — predict for next trading day
+    python daily_run.py                      # morning run — predict for next trading day
+    python daily_run.py --pre-london         # pre-London H1 confidence report
+    python daily_run.py --pre-ny             # pre-NY H1 confidence report
     python daily_run.py --record 2026-03-21  # record actual outcome for that date
 
 Requires:
@@ -25,6 +27,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from v2.pattern_scorer import build_daily_bias, format_telegram_daily, DailyBias
+from v2.h1_confidence import compute_h1_confidence, format_h1_telegram, H1Confidence
 from data.twelvedata_client import fetch_time_series
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -34,11 +37,15 @@ SYMBOLS = [
     "NZD/USD", "USD/CAD", "USD/CHF", "USD/JPY",
 ]
 
-LOG_FILE    = PROJECT_ROOT / "data" / "live_performance.jsonl"
-STATS_FILE  = PROJECT_ROOT / "data" / "live_stats.json"
+LOG_FILE      = PROJECT_ROOT / "data" / "live_performance.jsonl"
+STATS_FILE    = PROJECT_ROOT / "data" / "live_stats.json"
 SETTINGS_FILE = PROJECT_ROOT / "config" / "settings_v3.yaml"
 
 CONTINUATION_CLOSE_PCT = 0.20  # settings_v3.yaml: continuation_min_close_pct
+
+# H1 context: session candles + prior context bars
+H1_OUTPUTSIZE = 24
+H1_LOG_PATH   = str(PROJECT_ROOT / "data" / "h1_feature_log.jsonl")
 
 
 # ── API key loader ─────────────────────────────────────────────────────────────
@@ -402,6 +409,197 @@ def send_telegram(message: str) -> bool:
 
 # ── Next trading day logic ─────────────────────────────────────────────────────
 
+# ── H1 pre-session runner ─────────────────────────────────────────────────────
+
+def _load_latest_biases(api_key: str) -> dict[str, DailyBias]:
+    """Load today's D1 biases from live_performance.jsonl, or compute fresh."""
+    today = date.today().isoformat()
+    biases: dict[str, DailyBias] = {}
+
+    if LOG_FILE.exists():
+        for line in LOG_FILE.read_text().splitlines():
+            if line.strip():
+                e = json.loads(line)
+                if e["date"] == today and e["symbol"] in SYMBOLS:
+                    # Reconstruct minimal DailyBias from log for display purposes
+                    from v2.pattern_scorer import DailyBias as DB
+                    import datetime as _dt
+                    biases[e["symbol"]] = DB(
+                        symbol=e["symbol"],
+                        date=_dt.date.fromisoformat(e["date"]),
+                        pattern=e["pattern"],
+                        bias=e["predicted"],
+                        confidence=e["confidence"],
+                        confidence_note="",
+                        t1_high=e["features"].get("t1_high", 0),
+                        t1_low=e["features"].get("t1_low", 0),
+                        t1_close=e["features"].get("t1_close", 0),
+                        t2_high=e["features"].get("t2_high", 0),
+                        t2_low=e["features"].get("t2_low", 0),
+                        close_pct_beyond=e.get("close_pct", 0),
+                        message="",
+                    )
+
+    # Fall back: compute live for any missing symbols
+    missing = [s for s in SYMBOLS if s not in biases]
+    if missing:
+        pred_date = next_trading_day(date.today())
+        for sym in missing:
+            rows = fetch_d1_rows(sym, api_key)
+            if rows is None:
+                continue
+            t2, t1 = rows
+            biases[sym] = build_daily_bias(
+                symbol=sym,
+                prediction_date=pred_date,
+                t1_high=float(t1["High"]),
+                t1_low=float(t1["Low"]),
+                t1_close=float(t1["Close"]),
+                t2_high=float(t2["High"]),
+                t2_low=float(t2["Low"]),
+                continuation_min_close_pct=CONTINUATION_CLOSE_PCT,
+            )
+    return biases
+
+
+def _fetch_h1(symbol: str, api_key: str) -> "pd.DataFrame | None":
+    """Fetch last H1_OUTPUTSIZE H1 candles, sorted ascending."""
+    import pandas as pd
+    df = fetch_time_series(
+        symbol=symbol, interval="1h", outputsize=H1_OUTPUTSIZE, api_key=api_key,
+    )
+    if df is None or len(df) < 6:
+        return None
+    return df.sort_index()
+
+
+def _load_h1_logger():
+    """Lazy-load h1_logger module."""
+    import importlib.util as _ilu
+    path = PROJECT_ROOT / "scripts" / "v2" / "h1_logger.py"
+    spec = _ilu.spec_from_file_location("h1_logger", path)
+    mod  = _ilu.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def run_pre_session(session: str, api_key: str, dry_run: bool) -> None:
+    """Fetch H1 data, compute confidence scores, log features, print/send report."""
+    from datetime import datetime as _dt, timezone as _tz
+
+    utc_now  = _dt.now(tz=_tz.utc)
+    utc_time = utc_now.strftime("%a %d %b %Y %H:%M UTC")
+    log_date = date.today().isoformat()
+
+    print("=" * 60)
+    print(f"ICT Forex Bias — Pre-{session} H1 Confidence")
+    print(f"UTC time: {utc_now.strftime('%H:%M %Z')} | Date: {log_date}")
+    print("=" * 60)
+
+    print("\n[1/3] Loading D1 biases...")
+    d1_biases = _load_latest_biases(api_key)
+
+    print("\n[2/3] Fetching H1 data & computing confidence scores:")
+    print("-" * 60)
+    confidences: list[H1Confidence] = []
+
+    h1_logger = _load_h1_logger()
+
+    for sym in SYMBOLS:
+        d1    = d1_biases.get(sym)
+        df_h1 = _fetch_h1(sym, api_key)
+
+        if df_h1 is None:
+            print(f"  {sym:<10} [WARN] H1 fetch failed — skipping")
+            continue
+
+        conf = compute_h1_confidence(
+            df_h1=df_h1,
+            symbol=sym,
+            session=session,
+            d1_bias=d1.bias if d1 else "NEUTRAL",
+            d1_pattern=d1.pattern if d1 else "NONE",
+            d1_close_pct=d1.close_pct_beyond if d1 else 0.0,
+        )
+        confidences.append(conf)
+        _print_h1_debug_verbose(conf)
+
+        if not dry_run:
+            h1_logger.log_h1_features(conf, H1_LOG_PATH)
+
+    print()
+    print("=" * 60)
+    tg_msg = format_h1_telegram(confidences, session, utc_time, d1_biases)
+    print(tg_msg)
+    print("=" * 60)
+
+    if not dry_run:
+        print(f"\n  H1 features logged → {H1_LOG_PATH}")
+        sent = send_telegram(tg_msg)
+        if sent:
+            print("  📤 Telegram message sent.")
+        else:
+            print("  📋 Telegram disabled.")
+
+
+def _print_h1_debug_verbose(conf: H1Confidence) -> None:
+    """Detailed per-symbol debug output for Phase D verification."""
+    raw = conf.raw
+    sep = "─" * 45
+
+    print(f"\n  Symbol: {conf.symbol}")
+    print(f"  H1 candles loaded: {raw.h1_candles_used}")
+    print(f"  ATR14: {raw.atr14:.5f}  |  Current price: {raw.current_price:.5f}")
+
+    # BOS
+    if raw.latest_bos:
+        tag = "aligned" if raw.bos_aligned else "counter"
+        print(f"  BOS:   {raw.latest_bos.type} @ {raw.latest_bos.level:.5g}  [{tag}]")
+    else:
+        print("  BOS:   none detected")
+
+    # CHoCH
+    if raw.latest_choch:
+        print(f"  CHoCH: {raw.latest_choch.type} @ {raw.latest_choch.level:.5g}")
+
+    # FVG
+    nb = raw.nearest_bull_fvg
+    nbr = raw.nearest_bear_fvg
+    print(f"  FVG:   bull={raw.fvg_count_bull} unfilled  bear={raw.fvg_count_bear} unfilled")
+    if nb:
+        print(f"         nearest bull: {nb.low:.5g}–{nb.high:.5g}  "
+              f"size={nb.size_atr:.2f}×ATR  in_fvg={raw.price_in_fvg}")
+    if nbr:
+        print(f"         nearest bear: {nbr.low:.5g}–{nbr.high:.5g}  size={nbr.size_atr:.2f}×ATR")
+
+    # OB
+    nb_ob  = raw.nearest_bull_ob
+    nbr_ob = raw.nearest_bear_ob
+    ob_any = nb_ob or nbr_ob
+    if ob_any:
+        print(f"  OB:    present  nearby={raw.price_near_ob}")
+    else:
+        print("  OB:    none detected")
+
+    # Score breakdown
+    bd = conf.score_breakdown
+    if bd:
+        raw_t = bd.get("raw_total", conf.score)
+        clamped = f" → clamped to {conf.score}" if raw_t != conf.score else ""
+        print(
+            f"  Score: 50"
+            f" + BOS({bd.get('bos',0):+d})"
+            f" + FVG({bd.get('fvg',0):+d})"
+            f" + OB({bd.get('ob',0):+d})"
+            f" + Trend({bd.get('trend',0):+d})"
+            f" = {raw_t}{clamped}"
+            f" → Grade {conf.grade}"
+        )
+    else:
+        print(f"  Score: insufficient data")
+    print(f"  {sep}")
+
+
 def next_trading_day(from_date: date) -> date:
     """Return next Mon if from_date is Sat/Sun, else next calendar day."""
     candidate = from_date + timedelta(days=1)
@@ -411,6 +609,19 @@ def next_trading_day(from_date: date) -> date:
     return candidate
 
 
+# ── H1 actuals update ────────────────────────────────────────────────────────
+
+def _update_h1_actuals_for_date(record_date: str, _api_key: str) -> None:
+    """Call update_actuals.update_actuals() for the given date (uses backtest CSV)."""
+    import importlib.util as _ilu
+    path = PROJECT_ROOT / "scripts" / "v2" / "update_actuals.py"
+    spec = _ilu.spec_from_file_location("update_actuals", path)
+    mod  = _ilu.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    updated, skipped = mod.update_actuals(record_date)
+    print(f"  H1 actuals: {updated} updated, {skipped} already filled → data/h1_feature_log.jsonl")
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 def parse_args() -> argparse.Namespace:
@@ -418,6 +629,14 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--record", metavar="DATE",
         help="Record actual D1 outcome for DATE (YYYY-MM-DD)",
+    )
+    p.add_argument(
+        "--pre-london", action="store_true",
+        help="Run pre-London H1 confidence report (07:00 UTC)",
+    )
+    p.add_argument(
+        "--pre-ny", action="store_true",
+        help="Run pre-NY H1 confidence report (12:30 UTC)",
     )
     p.add_argument(
         "--dry-run", action="store_true",
@@ -434,12 +653,22 @@ def main() -> None:
         print("[ERROR] TWELVEDATA_API_KEY not set. Add to .env or export env var.")
         sys.exit(1)
 
+    # ── Mode: pre-session H1 report ───────────────────────────────
+    if args.pre_london:
+        run_pre_session("London", api_key, args.dry_run)
+        return
+
+    if args.pre_ny:
+        run_pre_session("NY", api_key, args.dry_run)
+        return
+
     # ── Mode: record actual ────────────────────────────────────────
     if args.record:
         print("=" * 60)
         print(f"Recording actual outcomes for {args.record}")
         print("=" * 60)
         update_actuals(args.record, api_key)
+        _update_h1_actuals_for_date(args.record, api_key)
         return
 
     # ── Mode: generate signals ─────────────────────────────────────
