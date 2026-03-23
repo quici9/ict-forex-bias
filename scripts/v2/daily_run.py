@@ -27,7 +27,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from v2.pattern_scorer import build_daily_bias, format_telegram_daily, DailyBias
-from v2.h1_confidence import compute_h1_confidence, format_h1_telegram, H1Confidence
+from v2.h1_confidence import (
+    compute_h1_confidence, format_h1_telegram, format_h1_compact_telegram, H1Confidence,
+)
 from data.twelvedata_client import fetch_time_series
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -484,15 +486,23 @@ def _load_h1_logger():
 
 
 def run_pre_session(session: str, api_key: str, dry_run: bool) -> None:
-    """Fetch H1 data, compute confidence scores, log features, print/send report."""
+    """Fetch H1 data, compute confidence scores, log features, send compact report.
+
+    Pre-session runs send a compact Telegram message listing only H1 features
+    with a non-zero score contribution. Full daily bias is sent by the 01:00 UTC
+    daily run instead.
+    """
     from datetime import datetime as _dt, timezone as _tz
 
     utc_now  = _dt.now(tz=_tz.utc)
     utc_time = utc_now.strftime("%a %d %b %Y %H:%M UTC")
     log_date = date.today().isoformat()
 
+    # Read active timezone label from env (set by GitHub Actions DST step)
+    tz_label = os.environ.get("ACTIVE_TZ", "")
+
     print("=" * 60)
-    print(f"ICT Forex Bias — Pre-{session} H1 Confidence")
+    print(f"ICT Forex Bias — Pre-{session} H1 Confidence [{tz_label or 'local'}]")
     print(f"UTC time: {utc_now.strftime('%H:%M %Z')} | Date: {log_date}")
     print("=" * 60)
 
@@ -529,7 +539,8 @@ def run_pre_session(session: str, api_key: str, dry_run: bool) -> None:
 
     print()
     print("=" * 60)
-    tg_msg = format_h1_telegram(confidences, session, utc_time, d1_biases)
+    # Compact format: scored features only — no full bias analysis
+    tg_msg = format_h1_compact_telegram(confidences, session, utc_time, tz_label)
     print(tg_msg)
     print("=" * 60)
 

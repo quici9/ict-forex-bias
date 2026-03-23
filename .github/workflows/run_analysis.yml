@@ -2,14 +2,25 @@ name: ICT Forex Bias — Daily Run (V3)
 
 on:
   schedule:
-    # London pre-KZ — 08:45 VN (01:45 UTC), Mon–Fri
-    # Records yesterday's actual + generates today's signals
-    - cron: "45 1 * * 1-5"
-    # NY pre-KZ — 13:45 VN (06:45 UTC), Mon–Fri
-    # Generates today's signals (reminder)
-    - cron: "45 6 * * 1-5"
+    # ── Daily Bias report — 08:00 VN (UTC+7) = 01:00 UTC, Mon–Fri ────────────
+    # Sends the full daily bias analysis via Telegram and records yesterday's actuals.
+    # No DST adjustment needed — 01:00 UTC is a fixed UTC time.
+    - cron: "0 1 * * 1-5"    # 01:00 UTC = 08:00 VN
+
+    # ── Pre-London Killzone (ICT London KZ: 2:00–5:00 AM EST/EDT) ────────────
+    # Pre-alert fires at 1:45 AM local (15 min before London open at 2:00 AM).
+    # Sends compact H1 feature score confirmation only (no full bias report).
+    - cron: "45 6 * * 1-5"   # EST period (Nov–Mar): 06:45 UTC = 1:45 AM EST
+    - cron: "45 5 * * 1-5"   # EDT period (Mar–Nov): 05:45 UTC = 1:45 AM EDT
+
+    # ── Pre-NY Killzone (ICT NY KZ: 7:00–11:00 AM EST/EDT) ───────────────────
+    # Pre-alert fires at 6:45 AM local (15 min before NY open at 7:00 AM).
+    # Sends compact H1 feature score confirmation only (no full bias report).
+    - cron: "45 11 * * 1-5"  # EST period (Nov–Mar): 11:45 UTC = 6:45 AM EST
+    - cron: "45 10 * * 1-5"  # EDT period (Mar–Nov): 10:45 UTC = 6:45 AM EDT
+
   workflow_dispatch:
-    # Manual trigger from Actions tab
+    # Manual trigger from Actions tab — always runs (skips DST guard)
 
 permissions:
   contents: write
@@ -20,48 +31,160 @@ jobs:
     timeout-minutes: 10
 
     steps:
+      # ── Step 1: DST guard ──────────────────────────────────────────────────
+      # Identifies which run mode was triggered and, for pre-session crons,
+      # checks whether this cron slot matches the active DST period.
+      #
+      # Outputs:
+      #   run_mode   → "daily" | "London" | "NY"
+      #   tz         → "EDT" | "EST"  (relevant for pre-session runs)
+      #   should_run → "true" | "false"
+      - name: DST check — identify run mode and validate cron slot
+        id: dst_check
+        run: |
+          python3 - <<'EOF'
+          import datetime, os, sys
+
+          def nth_sunday(year, month, n):
+              """Return the date of the nth Sunday in the given month/year."""
+              d = datetime.date(year, month, 1)
+              days_to_first_sunday = (6 - d.weekday()) % 7
+              first_sunday = d + datetime.timedelta(days=days_to_first_sunday)
+              return first_sunday + datetime.timedelta(weeks=n - 1)
+
+          today     = datetime.date.today()
+          now_utc   = datetime.datetime.utcnow()
+          utc_hour  = now_utc.hour
+          event     = os.environ.get("GITHUB_EVENT_NAME", "schedule")
+
+          # US DST boundaries for this year
+          year      = today.year
+          edt_start = nth_sunday(year, 3,  2)  # 2nd Sunday of March
+          edt_end   = nth_sunday(year, 11, 1)  # 1st Sunday of November
+          is_edt    = edt_start <= today < edt_end
+          tz_label  = "EDT" if is_edt else "EST"
+
+          # Expected UTC hour for each pre-session slot under active DST
+          london_expected_utc = 5  if is_edt else 6
+          ny_expected_utc     = 10 if is_edt else 11
+
+          # Classify the triggering cron slot
+          if event == "workflow_dispatch":
+              run_mode   = "daily"
+              should_run = True
+              reason     = "manual trigger (workflow_dispatch)"
+          elif utc_hour == 1:
+              # Fixed daily bias run — no DST concern
+              run_mode   = "daily"
+              should_run = True
+              reason     = "daily bias run (01:00 UTC, DST-independent)"
+          elif utc_hour == london_expected_utc:
+              run_mode   = "London"
+              should_run = True
+              reason     = f"correct London slot for {tz_label}"
+          elif utc_hour == ny_expected_utc:
+              run_mode   = "NY"
+              should_run = True
+              reason     = f"correct NY slot for {tz_label}"
+          elif utc_hour in (5, 6):
+              run_mode   = "London"
+              should_run = False
+              reason     = f"London off-peak cron — UTC {utc_hour:02d}:45 inactive in {tz_label} (expected {london_expected_utc:02d}:45)"
+          elif utc_hour in (10, 11):
+              run_mode   = "NY"
+              should_run = False
+              reason     = f"NY off-peak cron — UTC {utc_hour:02d}:45 inactive in {tz_label} (expected {ny_expected_utc:02d}:45)"
+          else:
+              run_mode   = "daily"
+              should_run = True
+              reason     = "unrecognised hour — defaulting to daily run"
+
+          # Summary printed to Actions log
+          print(f"Date      : {today}")
+          print(f"UTC time  : {utc_hour:02d}:{now_utc.minute:02d}")
+          print(f"DST period: {tz_label}  (EDT active {edt_start} → {edt_end})")
+          print(f"Run mode  : {run_mode}")
+          print(f"Should run: {should_run}  ({reason})")
+
+          # Write outputs for subsequent steps — MUST happen before sys.exit(0)
+          # so downstream steps always receive a valid should_run value.
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write(f"run_mode={run_mode}\n")
+              fh.write(f"tz={tz_label}\n")
+              fh.write(f"should_run={'true' if should_run else 'false'}\n")
+
+          if not should_run:
+              print(f"::notice::Skipping off-peak cron — {reason}")
+              sys.exit(0)
+          EOF
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+
       - name: Checkout repository
+        if: steps.dst_check.outputs.should_run == 'true'
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python 3.11
+        if: steps.dst_check.outputs.should_run == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
 
       - name: Install dependencies
+        if: steps.dst_check.outputs.should_run == 'true'
         run: pip install -r requirements.txt
 
-      - name: Record yesterday's actual (London run only)
-        # D1 Forex candles close at 22:00 UTC — London run (01:45 UTC) is safe to record
-        if: github.event_name == 'schedule'
+      # ── Daily run: record yesterday's actuals ─────────────────────────────
+      # Runs only on the 01:00 UTC daily cron (D1 candles closed at 22:00 UTC,
+      # so 3 hours have passed — safe to record the previous day's outcome).
+      - name: Record yesterday's actual (daily run only)
+        if: >
+          steps.dst_check.outputs.should_run == 'true' &&
+          steps.dst_check.outputs.run_mode == 'daily' &&
+          github.event_name == 'schedule'
         env:
           TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
         run: |
           PREV_DATE=$(date -u -d "yesterday" +%Y-%m-%d 2>/dev/null || date -u -v-1d +%Y-%m-%d)
-          HOUR=$(date -u +%H)
-          # Only record at London run (01:45 UTC, hour=01)
-          if [ "$HOUR" = "01" ]; then
-            echo "Recording actuals for $PREV_DATE"
-            python scripts/v2/daily_run.py --record "$PREV_DATE" || true
-          fi
+          echo "Recording actuals for $PREV_DATE"
+          python scripts/v2/daily_run.py --record "$PREV_DATE" || true
 
-      - name: Generate daily signals
+      # ── Dispatch to correct run mode ──────────────────────────────────────
+      # daily    → full bias analysis + Telegram report (sent at 08:00 VN)
+      # London   → compact H1 feature scores for London KZ (scored features only)
+      # NY       → compact H1 feature scores for NY KZ    (scored features only)
+      - name: Run analysis
+        if: steps.dst_check.outputs.should_run == 'true'
         env:
           TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python scripts/v2/daily_run.py
+          ACTIVE_TZ: ${{ steps.dst_check.outputs.tz }}
+        run: |
+          RUN_MODE="${{ steps.dst_check.outputs.run_mode }}"
+          if   [ "$RUN_MODE" = "daily"  ]; then python scripts/v2/daily_run.py
+          elif [ "$RUN_MODE" = "London" ]; then python scripts/v2/daily_run.py --pre-london
+          elif [ "$RUN_MODE" = "NY"     ]; then python scripts/v2/daily_run.py --pre-ny
+          fi
 
+      # ── Persist updated data (daily run only) ─────────────────────────────
+      # Pre-session runs do not generate new predictions, so no files to commit.
       - name: Sync data to docs/data (GitHub Pages)
+        if: >
+          steps.dst_check.outputs.should_run == 'true' &&
+          steps.dst_check.outputs.run_mode == 'daily'
         run: |
           mkdir -p docs/data
           cp data/live_stats.json docs/data/live_stats.json
           cp data/live_performance.jsonl docs/data/live_performance.jsonl
 
       - name: Commit live performance data
+        if: >
+          steps.dst_check.outputs.should_run == 'true' &&
+          steps.dst_check.outputs.run_mode == 'daily'
         run: |
           git config user.name "ict-bias-bot"
           git config user.email "bot@users.noreply.github.com"

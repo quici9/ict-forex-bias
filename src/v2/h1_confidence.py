@@ -375,6 +375,64 @@ def format_h1_telegram(
     return "\n".join(lines)
 
 
+def format_h1_compact_telegram(
+    confidences: list[H1Confidence],
+    session: str,
+    utc_time: str,
+    tz_label: str = "",
+) -> str:
+    """Compact pre-session Telegram message — scored features only.
+
+    Shows only symbols with a directional D1 bias. For each, lists only the
+    H1 features that contributed a non-zero score (BOS, FVG, OB, Trend).
+    Neutral symbols and zero-contribution features are silently omitted.
+    """
+    tz_suffix = f" [{tz_label}]" if tz_label else ""
+    lines = [
+        f"🕐 *Pre-{session} — {utc_time}*{tz_suffix}",
+        "────────────────────────────────────",
+    ]
+
+    directional = [c for c in confidences if c.d1_bias != "NEUTRAL"]
+
+    if not directional:
+        lines.append("⬜ No directional bias — all pairs neutral")
+        lines.append("────────────────────────────────────")
+        return "\n".join(lines)
+
+    _bias_emoji  = {"BULLISH": "🟢", "BEARISH": "🔴"}
+    _grade_emoji = {"A": " ✅", "B": "", "C": " ⚠️", "D": " ❌"}
+
+    for conf in directional:
+        bd = conf.score_breakdown
+        emoji = _bias_emoji.get(conf.d1_bias, "⬜")
+        g_tag = _grade_emoji.get(conf.grade, "")
+        lines.append(
+            f"{emoji} {conf.symbol}  {conf.d1_bias}  "
+            f"`{conf.score}/100 {conf.grade}`{g_tag}"
+        )
+
+        if not bd:
+            lines.append("   (no feature data)")
+            continue
+
+        # Collect features with non-zero contribution
+        feature_parts: list[str] = []
+        for label, key in [("BOS", "bos"), ("FVG", "fvg"), ("OB", "ob"), ("Trend", "trend")]:
+            pts = bd.get(key, 0)
+            if pts != 0:
+                sign = "+" if pts > 0 else ""
+                feature_parts.append(f"{label}({sign}{pts})")
+
+        if feature_parts:
+            lines.append(f"   {' · '.join(feature_parts)}")
+        else:
+            lines.append("   base score only — no feature confluence")
+
+    lines.append("────────────────────────────────────")
+    return "\n".join(lines)
+
+
 # ── Main entry point ──────────────────────────────────────────────────────────
 
 def compute_h1_confidence(

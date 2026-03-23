@@ -24,9 +24,27 @@ h1_confirmation:
   h1_context_candles_before: 18
 
 live:
-  daily_report_utc: "22:00"
-  pre_london_utc: "06:30"
-  pre_ny_utc: "12:30"
+  daily_report_utc: "01:00"   # 01:00 UTC = 08:00 VN (UTC+7) — full daily bias report
+
+  # ICT Killzone times in EST (UTC-5, Nov–Mar) / EDT (UTC-4, Mar–Nov)
+  # London KZ:  2:00–5:00 AM EST  |  pre-alert 15 min before open
+  # NY KZ:      7:00–11:00 AM EST |  pre-alert 15 min before open
+
+  killzone_london:
+    start_est: "02:00"
+    end_est:   "05:00"
+    pre_alert_utc_est: "06:45"   # EST (UTC-5): 02:00 EST = 07:00 UTC → alert at 06:45 UTC
+    pre_alert_utc_edt: "05:45"   # EDT (UTC-4): 02:00 EDT = 06:00 UTC → alert at 05:45 UTC
+
+  killzone_ny:
+    start_est: "07:00"
+    end_est:   "11:00"
+    pre_alert_utc_est: "11:45"   # EST (UTC-5): 07:00 EST = 12:00 UTC → alert at 11:45 UTC
+    pre_alert_utc_edt: "10:45"   # EDT (UTC-4): 07:00 EDT = 11:00 UTC → alert at 10:45 UTC
+
+  # Active UTC times used by the runner (EST base — GitHub Actions cron does not auto-adjust for DST)
+  pre_london_utc: "06:45"   # EST base; EDT equivalent = 05:45 UTC
+  pre_ny_utc:     "11:45"   # EST base; EDT equivalent = 10:45 UTC
 
 monitoring:
   rolling_window_days: 20
@@ -38,4 +56,4 @@ telegram:
   enabled: true          # set to true when bot is ready
   bot_token: ""          # or set TELEGRAM_BOT_TOKEN env var
   chat_id: ""            # or set TELEGRAM_CHAT_ID env var
-  send_daily_at_utc: "22:00"
+  send_daily_at_utc: "01:00"   # 01:00 UTC = 08:00 VN
