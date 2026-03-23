@@ -445,7 +445,7 @@ def _load_latest_biases(api_key: str) -> dict[str, DailyBias]:
     # Fall back: compute live for any missing symbols
     missing = [s for s in SYMBOLS if s not in biases]
     if missing:
-        pred_date = next_trading_day(date.today())
+        pred_date = date.today()
         for sym in missing:
             rows = fetch_d1_rows(sym, api_key)
             if rows is None:
@@ -683,12 +683,12 @@ def main() -> None:
         return
 
     # ── Mode: generate signals ─────────────────────────────────────
+    # At 01:00 UTC, yesterday's D1 candle is closed → bias is for TODAY.
     today = date.today()
-    prediction_date = next_trading_day(today)
+    prediction_date = today
 
     print("=" * 60)
-    print(f"ICT Forex Bias — run date: {today.strftime('%a %d %b %Y')}")
-    print(f"Predicting for:            {prediction_date.strftime('%a %d %b %Y')}")
+    print(f"ICT Forex Bias — Daily Bias for {prediction_date.strftime('%a %d %b %Y')}")
     print("=" * 60)
 
     print("\n[DEBUG] Per-symbol pattern detection:")
