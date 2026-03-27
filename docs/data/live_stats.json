@@ -1,14 +1,14 @@
 {
-  "last_updated": "2026-03-27T01:35:48.571082+00:00",
-  "rolling_20d_precision": 0.4,
-  "total_signals": 31,
+  "last_updated": "2026-03-27T07:09:52.659597+00:00",
+  "rolling_20d_precision": 0.35,
+  "total_signals": 32,
   "total_correct": 18,
-  "overall_precision": 0.5806,
+  "overall_precision": 0.5625,
   "alert": true,
   "per_symbol": {
     "AUD/USD": {
-      "precision": 0.6667,
-      "total": 3,
+      "precision": 0.5,
+      "total": 4,
       "correct": 2
     },
     "EUR/USD": {
