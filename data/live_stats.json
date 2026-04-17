@@ -1,50 +1,50 @@
 {
-  "last_updated": "2026-04-16T01:32:39.999634+00:00",
-  "rolling_20d_precision": 0.3,
-  "total_signals": 112,
-  "total_correct": 42,
-  "overall_precision": 0.375,
-  "alert": true,
+  "last_updated": "2026-04-17T01:32:49.180015+00:00",
+  "rolling_20d_precision": 0.5,
+  "total_signals": 120,
+  "total_correct": 46,
+  "overall_precision": 0.3833,
+  "alert": false,
   "per_symbol": {
     "AUD/USD": {
-      "precision": 0.3571,
-      "total": 14,
+      "precision": 0.3333,
+      "total": 15,
       "correct": 5
     },
     "EUR/USD": {
-      "precision": 0.3571,
-      "total": 14,
-      "correct": 5
+      "precision": 0.4,
+      "total": 15,
+      "correct": 6
     },
     "GBP/JPY": {
-      "precision": 0.2143,
-      "total": 14,
+      "precision": 0.2,
+      "total": 15,
       "correct": 3
     },
     "GBP/USD": {
-      "precision": 0.4286,
-      "total": 14,
-      "correct": 6
+      "precision": 0.4667,
+      "total": 15,
+      "correct": 7
     },
     "NZD/USD": {
-      "precision": 0.4286,
-      "total": 14,
-      "correct": 6
+      "precision": 0.4667,
+      "total": 15,
+      "correct": 7
     },
     "USD/CAD": {
-      "precision": 0.2143,
-      "total": 14,
+      "precision": 0.2,
+      "total": 15,
       "correct": 3
     },
     "USD/CHF": {
-      "precision": 0.4286,
-      "total": 14,
+      "precision": 0.4,
+      "total": 15,
       "correct": 6
     },
     "USD/JPY": {
-      "precision": 0.5714,
-      "total": 14,
-      "correct": 8
+      "precision": 0.6,
+      "total": 15,
+      "correct": 9
     }
   }
 }
